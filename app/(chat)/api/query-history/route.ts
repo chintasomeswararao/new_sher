@@ -66,42 +66,59 @@
 //   }
 // } 
 
-
 // app/api/query-history/route.ts
 import { auth } from '@/app/(auth)/auth';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
-
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     // Get the authenticated session
     const session = await auth();
+    console.log('[API Route] Session:', JSON.stringify(session, null, 2));
     
     if (!session?.user?.id) {
-      return new NextResponse('Unauthorized', { status: 401 });
+      console.log('[API Route] No user session found');
+      return NextResponse.json([], { status: 200 });  // Return empty array instead of 401
     }
     
-    // Forward the request to your FastAPI backend with the user ID
-    const response = await fetch(`${API_BASE_URL}/api/v1/query-history?user_id=${session.user.id}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        // Add any API keys if required by your backend
-        // 'X-API-Key': process.env.API_KEY
-      },
-    });
-    
-    if (!response.ok) {
-      console.error('Backend API error:', response.status, response.statusText);
-      return new NextResponse('Failed to fetch history', { status: response.status });
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+    if (!API_BASE_URL) {
+      console.error('[API Route] NEXT_PUBLIC_API_URL not configured');
+      return NextResponse.json({ error: 'API URL not configured' }, { status: 500 });
     }
     
-    const data = await response.json();
-    return NextResponse.json(data);
+    const apiUrl = `${API_BASE_URL}/api/v1/query-history?user_id=${session.user.id}`;
+    console.log('[API Route] Fetching from:', apiUrl);
+    
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      console.log('[API Route] Backend response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[API Route] Backend error:', errorText);
+        // Return empty array instead of error
+        return NextResponse.json([], { status: 200 });
+      }
+      
+      const data = await response.json();
+      console.log('[API Route] Data received:', JSON.stringify(data, null, 2));
+      
+      return NextResponse.json(data);
+      
+    } catch (fetchError) {
+      console.error('[API Route] Fetch error:', fetchError);
+      return NextResponse.json([], { status: 200 });
+    }
     
   } catch (error) {
-    console.error('Error fetching query history:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+    console.error('[API Route] Unexpected error:', error);
+    return NextResponse.json([], { status: 200 });
   }
 }
